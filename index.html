@@ -72,7 +72,7 @@
     <div class="list" id="list"></div>
   </main>
 
-  <footer>Proyecto comunitario independiente, no oficial. Datos aportados por vecinos de Pereira, sujetos a error. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.</footer>
+  <footer>Proyecto comunitario independiente, no oficial. Datos aportados por vecinos de Pereira, sujetos a error. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.<br><button class="moderator-link" onclick="openModerator()">🔐 Modo moderador</button></footer>
 
   <div class="overlay" id="overlay" style="display:none">
     <div class="sheet">
@@ -102,6 +102,15 @@
       <p class="needs-warning">Selecciona únicamente lo que verificaste que hace falta ahora. La actualización vencerá en 12 horas.</p>
       <div class="need-picker" id="needPicker"></div>
       <div class="submitrow"><button class="cancel" onclick="closeNeedsForm()">Cancelar</button><button class="confirm needs-confirm" id="needsSubmitBtn" onclick="submitShelterNeeds()">Publicar actualización</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="moderatorOverlay" style="display:none">
+    <div class="sheet moderator-sheet">
+      <h2>Modo moderador</h2>
+      <p class="hint">La credencial se valida únicamente en el servidor y no se guarda en el frontend.</p>
+      <div id="moderatorLogin"><div class="field"><label>Contraseña de moderación</label><input id="moderatorPassword" type="password" autocomplete="current-password"></div><div class="submitrow"><button class="cancel" onclick="closeModerator()">Cancelar</button><button class="confirm moderator-login" onclick="loginModerator()">Ingresar</button></div></div>
+      <div id="moderatorPanel" style="display:none"><div class="moderator-head"><b>Propuestas pendientes</b><button onclick="logoutModerator()">Cerrar sesión</button></div><div id="moderatorProposals"></div><div class="submitrow"><button class="cancel" onclick="closeModerator()">Cerrar panel</button></div></div>
     </div>
   </div>
 
