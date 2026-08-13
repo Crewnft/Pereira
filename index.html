@@ -36,11 +36,12 @@
       <div class="stat a"><div class="n mono" id="statAcopio">0</div><div class="l">Acopios activos</div></div>
       <div class="stat r"><div class="n mono" id="statRiesgo">0</div><div class="l">Riesgos reportados</div></div>
       <div class="stat v"><div class="n mono" id="statVerif">0</div><div class="l">Verificados</div></div>
+      <div class="stat c"><div class="n mono" id="statComercio">0</div><div class="l">Comercios reportados</div></div>
       <div class="stat"><div class="n mono" id="statConfirm">0</div><div class="l">Confirmaciones</div></div>
     </div>
 
     <section class="panel">
-      <div class="panel-h"><span class="t">Mapa — acopio, albergues, zonas, hospitales y reportes</span><span class="sub">toca un punto para ver detalle</span></div>
+      <div class="panel-h"><span class="t">Mapa — ayuda, alertas y comercios reportados</span><span class="sub">toca un punto para ver detalle</span></div>
       <div class="nearby-tools"><button class="nearby-btn" id="nearbyBtn" onclick="findNearby()">📍 Ver ayuda cerca de mí</button><span>Radio de 3 km · ubicación privada</span></div>
       <div class="map-wrap"><div id="map"></div><div class="legend" id="legend"></div><div class="nearby-results" id="nearbyResults" hidden></div></div>
       <div class="zones-note">Mapa comunitario informativo. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.</div>
@@ -54,12 +55,14 @@
     <div class="actions">
       <button class="btn acopio" onclick="openForm('acopio')">+ Reportar punto de acopio</button>
       <button class="btn riesgo" onclick="openForm('riesgo')">+ Reportar edificio en riesgo</button>
+      <button class="btn comercio" onclick="openForm('comercio')">+ Reportar comercio abierto</button>
     </div>
 
     <div class="section-title">Reportes comunitarios</div>
     <div class="tabs">
       <button class="tab acopio-t active" id="tabAcopio" onclick="switchTab('acopio')">Acopio</button>
       <button class="tab riesgo-t" id="tabRiesgo" onclick="switchTab('riesgo')">Edificios en riesgo</button>
+      <button class="tab comercio-t" id="tabComercio" onclick="switchTab('comercio')">Comercios abiertos</button>
     </div>
     <div class="list" id="list"></div>
   </main>
@@ -70,10 +73,17 @@
     <div class="sheet">
       <h2 id="formTitle">Reportar</h2>
       <p class="hint" id="formHint"></p>
+      <div class="field" id="f_nameBlock" style="display:none"><label>Nombre del establecimiento *</label><input id="f_name" maxlength="100" placeholder="Ej: Supermercado del barrio"></div>
       <div class="field"><label>Dirección o punto de referencia *</label><input id="f_addr" placeholder="Ej: Cra 8 con Calle 21, barrio Cuba"></div>
       <div class="field"><label>Barrio / comuna</label><input id="f_barrio" placeholder="Ej: Cuba"></div>
       <div class="field" id="f_needBlock"><label>¿Qué necesita este punto ahora? *</label><input id="f_need" placeholder="Ej: agua, pañales, linternas"></div>
       <div class="field" id="f_sevBlock"><label>Gravedad observada *</label><select id="f_sev"><option value="grietas">Grietas visibles</option><option value="inclinado">Estructura inclinada</option><option value="colapso_parcial">Colapso parcial</option><option value="otro">Otro riesgo</option></select></div>
+      <div id="f_commerceBlock" style="display:none">
+        <div class="field"><label>Tipo de comercio *</label><select id="f_category"><option value="supermercado">🛒 Supermercado</option><option value="tienda">🏪 Tienda</option><option value="farmacia">💊 Farmacia</option><option value="combustible">⛽ Estación de servicio</option><option value="alimentos">🍞 Alimentos</option><option value="otro">📍 Otro comercio esencial</option></select></div>
+        <div class="field"><label>Horario observado</label><input id="f_hours" maxlength="120" placeholder="Ej: abierto hasta las 6 p. m."></div>
+        <div class="field"><label>Productos disponibles</label><input id="f_products" maxlength="200" placeholder="Ej: agua, pan, enlatados"></div>
+        <div class="field"><label>Medios de pago observados</label><input id="f_payment" maxlength="120" placeholder="Ej: efectivo y transferencia"></div>
+      </div>
       <div class="field"><label>Descripción</label><textarea id="f_desc" placeholder="Detalles útiles: horario si es acopio, qué viste si es riesgo, contacto, etc."></textarea></div>
       <div class="field"><label>Ubicación en el mapa (opcional, toca para marcar)</label><div id="pickmap"></div><div class="maphint" id="pickhint">Sin marcar — se usará solo la dirección escrita.</div></div>
       <div class="submitrow"><button class="cancel" onclick="closeForm()">Cancelar</button><button class="confirm" id="submitBtn" onclick="submitForm()">Publicar reporte</button></div>
