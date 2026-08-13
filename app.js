@@ -154,7 +154,10 @@
   function shelterNeedsHtml(item) {
     const update = activeShelterUpdate(shelterId(item));
     const pending = shelterNeedProposals.filter(proposal => proposal.shelterId === shelterId(item));
-    const pendingHtml = pending.map(proposal => `<div class="pending-needs"><b>Propuesta pendiente</b><span>${SHELTER_NEEDS.filter(([key]) => proposal.needs.includes(key)).map(([, emoji]) => emoji).join(' ')}</span><button onclick="confirmShelterNeeds('${proposal.id}')">✓ Confirmar (${proposal.confirmations}/5)</button></div>`).join('');
+    const pendingHtml = pending.map(proposal => {
+      const needs = SHELTER_NEEDS.filter(([key]) => proposal.needs.includes(key));
+      return `<details class="pending-needs"><summary><span>🟡 Propuesta comunitaria</span><b>${proposal.confirmations} de 5 verificaciones</b></summary><div class="pending-needs-detail"><div class="needs-chips">${needs.map(([, emoji, label]) => `<span>${emoji} ${escapeHtml(label)}</span>`).join('')}</div><small>Confirma únicamente si verificaste estas necesidades en el albergue.</small><button onclick="confirmShelterNeeds('${proposal.id}')">✓ Confirmar propuesta</button></div></details>`;
+    }).join('');
     if (!update) return `<div class="needs-empty">Necesidades: sin reporte confirmado</div>${pendingHtml}`;
     const selected = new Set(update.needs);
     const source = update.source === 'moderator-verified' ? 'Verificado por moderación' : 'Confirmado por la comunidad';
@@ -377,6 +380,7 @@
       closeNeedsForm();
       await loadShelterNeeds();
       renderStaticContent();
+      renderReports();
       alert('La propuesta quedó pendiente. Se publicará con 5 confirmaciones únicas o aprobación de moderación.');
     } catch (error) {
       alert(error.message || 'No fue posible publicar la actualización.');
@@ -391,7 +395,7 @@
       const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', proposalId }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'No fue posible confirmar.');
-      await loadShelterNeeds(); renderStaticContent();
+      await loadShelterNeeds(); renderStaticContent(); renderReports();
       if (!payload.added) alert('Este dispositivo ya había confirmado esta propuesta.');
     } catch (error) { alert(error.message || 'No fue posible confirmar.'); }
   };
@@ -427,7 +431,7 @@
   window.moderateShelterProposal = async function (action, proposalId) {
     const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, proposalId }) });
     const payload = await response.json(); if (!response.ok) return alert(payload.error || 'No fue posible moderar.');
-    await loadShelterNeeds(); renderStaticContent(); renderModeratorProposals();
+    await loadShelterNeeds(); renderStaticContent(); renderReports(); renderModeratorProposals();
   };
 
   function reportTitle(item) {
@@ -448,7 +452,7 @@
   }
 
   function reportTypeLabel(type) {
-    const labels = { acopio: '📦 Acopio', riesgo: '⚠️ Edificio en riesgo', comercio: '🛒 Comercio abierto' };
+    const labels = { acopio: '📦 Acopio', riesgo: '⚠️ Edificio en riesgo', comercio: '🛒 Comercio abierto', necesidades: '🏠 Necesidades de albergue' };
     return labels[type] || '📍 Reporte';
   }
 
@@ -467,13 +471,20 @@
   }
 
   function renderReports() {
-    const list = (activeTab === 'todos' ? Object.values(reports).flat() : reports[activeTab] || [])
+    const needReports = shelterNeedProposals.map(proposal => ({ ...proposal, type: 'necesidades' }));
+    const list = (activeTab === 'todos' ? Object.values(reports).flat().concat(needReports) : activeTab === 'necesidades' ? needReports : reports[activeTab] || [])
       .slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     byId('tabTodos').classList.toggle('active', activeTab === 'todos');
     byId('tabAcopio').classList.toggle('active', activeTab === 'acopio');
     byId('tabRiesgo').classList.toggle('active', activeTab === 'riesgo');
     byId('tabComercio').classList.toggle('active', activeTab === 'comercio');
+    byId('tabNecesidades').classList.toggle('active', activeTab === 'necesidades');
     byId('list').innerHTML = list.length ? list.map(item => {
+      if (item.type === 'necesidades') {
+        const shelter = data.shelters.find(candidate => shelterId(candidate) === item.shelterId);
+        const needs = SHELTER_NEEDS.filter(([key]) => item.needs.includes(key));
+        return `<article class="card shelter-report"><div class="report-category necesidades">${reportTypeLabel(item.type)}</div><div class="head"><div><div class="title">${escapeHtml(shelter ? shelter.n : 'Albergue')}</div><div class="addr">Propuesta comunitaria pendiente</div></div><span class="status unverified">${item.confirmations} de 5</span></div><div class="needs-chips">${needs.map(([, emoji, label]) => `<span>${emoji} ${escapeHtml(label)}</span>`).join('')}</div><div class="proposal-explanation">Se publicará como necesidad confirmada al alcanzar 5 verificaciones únicas.</div><div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${shelter ? `<a class="mini mini-link" href="${directionsUrl(shelter.lat, shelter.lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>` : ''}<button class="mini proposal-confirm" onclick="confirmShelterNeeds('${item.id}')">✓ Confirmar</button></div></div></article>`;
+      }
       const freshness = commerceFreshness(item);
       const statusClass = item.verified ? 'verified' : item.confirmations >= 5 ? 'community' : 'unverified';
       const statusLabel = item.verified ? 'Verificado oficialmente' : item.confirmations >= 5 ? 'Confirmado por la comunidad' : 'Sin confirmar';
@@ -523,7 +534,7 @@
   }
 
   window.switchTab = function (type) {
-    if (type !== 'todos' && !STORAGE_KEYS[type]) return;
+    if (type !== 'todos' && type !== 'necesidades' && !STORAGE_KEYS[type]) return;
     activeTab = type;
     renderReports();
   };
@@ -704,6 +715,7 @@
     try {
       await loadShelterNeeds();
       renderStaticContent();
+      renderReports();
     } catch (error) {
       console.warn('Las necesidades de albergues no están disponibles.', error);
     }
