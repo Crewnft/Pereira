@@ -90,7 +90,7 @@
         <div class="field"><label>Medios de pago observados</label><input id="f_payment" maxlength="120" placeholder="Ej: efectivo y transferencia"></div>
       </div>
       <div class="field"><label>Descripción</label><textarea id="f_desc" placeholder="Detalles útiles: horario si es acopio, qué viste si es riesgo, contacto, etc."></textarea></div>
-      <div class="field"><label>Ubicación en el mapa (opcional, toca para marcar)</label><div id="pickmap"></div><div class="maphint" id="pickhint">Sin marcar — se usará solo la dirección escrita.</div></div>
+      <div class="field"><label>Ubicación en el mapa *</label><div class="location-actions"><button type="button" id="useLocationBtn" onclick="useMyReportLocation()">📍 Usar mi ubicación</button><button type="button" id="searchAddressBtn" onclick="searchReportAddress()">🔎 Buscar dirección escrita</button></div><div id="pickmap"></div><div class="maphint" id="pickhint">Ubicación obligatoria — usa una opción o toca el mapa para marcar.</div></div>
       <div class="submitrow"><button class="cancel" onclick="closeForm()">Cancelar</button><button class="confirm" id="submitBtn" onclick="submitForm()">Publicar reporte</button></div>
     </div>
   </div>

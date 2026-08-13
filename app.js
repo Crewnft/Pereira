@@ -4,6 +4,7 @@
   const data = window.PEREIRA_DATA;
   const STORAGE_URL = '/api/storage';
   const CONFIRM_URL = '/api/confirm';
+  const GEOCODE_URL = '/api/geocode';
   const CONFIRMED_LOCAL_KEY = 'pereira-confirmed-reports-v1';
   const NEARBY_RADIUS_KM = 3;
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
@@ -425,10 +426,60 @@
   function resetForm() {
     ['f_name', 'f_addr', 'f_barrio', 'f_need', 'f_hours', 'f_products', 'f_payment', 'f_desc'].forEach(id => { byId(id).value = ''; });
     byId('f_sev').value = 'grietas';
+    byId('useLocationBtn').disabled = false;
+    byId('useLocationBtn').textContent = '📍 Usar mi ubicación';
+    byId('searchAddressBtn').disabled = false;
+    byId('searchAddressBtn').textContent = '🔎 Buscar dirección escrita';
     pickedLocation = null;
-    byId('pickhint').textContent = 'Sin marcar — se usará solo la dirección escrita.';
+    byId('pickhint').textContent = 'Ubicación obligatoria — usa una opción o toca el mapa para marcar.';
     if (pickMarker) { pickMarker.remove(); pickMarker = null; }
   }
+
+  function setPickedLocation(lat, lng, message) {
+    pickedLocation = { lat: Number(lat), lng: Number(lng) };
+    const point = L.latLng(pickedLocation.lat, pickedLocation.lng);
+    if (pickMarker) pickMarker.setLatLng(point);
+    else pickMarker = L.marker(point).addTo(pickMap);
+    pickMap.setView(point, 17);
+    byId('pickhint').textContent = message || `${pickedLocation.lat.toFixed(5)}, ${pickedLocation.lng.toFixed(5)} — revisa el punto antes de publicar.`;
+  }
+
+  window.useMyReportLocation = function () {
+    const button = byId('useLocationBtn');
+    if (!navigator.geolocation) return alert('Este navegador no permite obtener la ubicación.');
+    button.disabled = true;
+    button.textContent = '📍 Ubicando…';
+    navigator.geolocation.getCurrentPosition(position => {
+      setPickedLocation(position.coords.latitude, position.coords.longitude, 'Tu ubicación aproximada — revisa el punto antes de publicar.');
+      button.disabled = false;
+      button.textContent = '✓ Ubicación aplicada';
+    }, () => {
+      button.disabled = false;
+      button.textContent = '📍 Usar mi ubicación';
+      alert('No fue posible obtener tu ubicación. Puedes buscar la dirección o marcar el mapa manualmente.');
+    }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+  };
+
+  window.searchReportAddress = async function () {
+    const address = byId('f_addr').value.trim();
+    const barrio = byId('f_barrio').value.trim();
+    if (!address) return alert('Escribe primero la dirección que deseas buscar.');
+    const button = byId('searchAddressBtn');
+    button.disabled = true;
+    button.textContent = '🔎 Buscando…';
+    try {
+      const response = await fetch(`${GEOCODE_URL}?q=${encodeURIComponent([address, barrio].filter(Boolean).join(', '))}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'No fue posible buscar la dirección.');
+      if (!payload.found) return alert('No encontramos esa dirección dentro de Pereira. Ajusta el texto o marca el punto manualmente.');
+      setPickedLocation(payload.lat, payload.lng, `Resultado aproximado: ${payload.label}. Revisa y ajusta el punto si es necesario.`);
+    } catch (error) {
+      alert(error.message || 'No fue posible buscar la dirección.');
+    } finally {
+      button.disabled = false;
+      button.textContent = '🔎 Buscar dirección escrita';
+    }
+  };
 
   window.openForm = function (type) {
     if (!STORAGE_KEYS[type]) return;
@@ -454,10 +505,7 @@
         pickMap = L.map('pickmap').setView(data.center, 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(pickMap);
         pickMap.on('click', event => {
-          pickedLocation = { lat: event.latlng.lat, lng: event.latlng.lng };
-          if (pickMarker) pickMarker.setLatLng(event.latlng);
-          else pickMarker = L.marker(event.latlng).addTo(pickMap);
-          byId('pickhint').textContent = `${event.latlng.lat.toFixed(5)}, ${event.latlng.lng.toFixed(5)}`;
+          setPickedLocation(event.latlng.lat, event.latlng.lng);
         });
       }
       pickMap.invalidateSize();
@@ -474,8 +522,8 @@
     const address = byId('f_addr').value.trim();
     const need = byId('f_need').value.trim();
     const name = byId('f_name').value.trim();
-    if (!address || (formType === 'acopio' && !need) || (formType === 'comercio' && (!name || !pickedLocation))) {
-      if (formType === 'comercio' && !pickedLocation) alert('Marca la ubicación del comercio en el mapa para poder mostrarlo y ofrecer navegación.');
+    if (!address || !pickedLocation || (formType === 'acopio' && !need) || (formType === 'comercio' && !name)) {
+      if (!pickedLocation) alert('Selecciona la ubicación usando tu posición, buscando la dirección o marcando el mapa.');
       else alert('Completa los campos obligatorios.');
       return;
     }
