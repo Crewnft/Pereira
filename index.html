@@ -43,6 +43,7 @@
     <section class="panel">
       <div class="panel-h"><span class="t">Mapa — ayuda, alertas y comercios reportados</span><span class="sub">toca un punto para ver detalle</span></div>
       <div class="nearby-tools"><button class="nearby-btn" id="nearbyBtn" onclick="findNearby()">📍 Ver ayuda cerca de mí</button><span>Radio de 3 km · ubicación privada</span></div>
+      <div class="map-filters" id="mapFilters" aria-label="Filtrar puntos del mapa"></div>
       <div class="map-wrap"><div id="map"></div><div class="legend" id="legend"></div><div class="nearby-results" id="nearbyResults" hidden></div></div>
       <div class="zones-note">Mapa comunitario informativo. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.</div>
     </section>
@@ -52,10 +53,13 @@
     <section class="panel"><div class="panel-h"><span class="t">Puntos de acopio</span><span class="sub">oficiales reportados</span></div><div class="zones" id="acopioList"></div></section>
     <section class="panel"><div class="panel-h"><span class="t">Últimas noticias</span><span class="sub">curado manualmente</span></div><div class="news" id="newsList"></div></section>
 
-    <div class="actions">
-      <button class="btn acopio" onclick="openForm('acopio')">+ Reportar punto de acopio</button>
-      <button class="btn riesgo" onclick="openForm('riesgo')">+ Reportar edificio en riesgo</button>
-      <button class="btn comercio" onclick="openForm('comercio')">+ Reportar comercio abierto</button>
+    <div class="actions" id="reportActions">
+      <div class="report-menu" id="reportMenu">
+        <button class="btn acopio" onclick="openForm('acopio')">📦 Reportar punto de acopio</button>
+        <button class="btn riesgo" onclick="openForm('riesgo')">⚠️ Reportar edificio en riesgo</button>
+        <button class="btn comercio" onclick="openForm('comercio')">🛒 Reportar comercio abierto</button>
+      </div>
+      <button class="report-toggle" id="reportToggle" aria-expanded="false" aria-controls="reportMenu" onclick="toggleReportMenu()"><span>＋</span> Nuevo reporte</button>
     </div>
 
     <div class="section-title">Reportes comunitarios</div>
