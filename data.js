@@ -1,5 +1,14 @@
 window.PEREIRA_DATA = {
   center: [4.8087, -75.6906],
+  officialRestrictions: [
+    {
+      id:'centro-emergency-cordon-2026-08-13',
+      n:'Cerco de emergencia — Centro de Pereira',
+      d:'Circulación vehicular y peatonal restringida entre carreras 4 y 10, desde la calle 14 hasta la calle 28. Evite la zona y facilite las labores de emergencia.',
+      source:'Alcaldía de Pereira · 13 ago 2026, 4:12 p. m.',
+      bounds:[[4.81490,-75.69387],[4.81127,-75.69147],[4.81435,-75.69887],[4.81798,-75.70127]]
+    }
+  ],
   zones: [
     {n:'La Lorena', d:'5 edificios colapsados en una misma unidad residencial', sev:'crit', lat:4.80535, lng:-75.69724},
     {n:'Centro / Plaza de Bolívar', d:'Edificio Alberto Vo5 y alrededores; energía y gas suspendidos', sev:'crit', lat:4.81433, lng:-75.69464},
@@ -44,7 +53,7 @@ window.PEREIRA_DATA = {
     {n:'Estadio Mora Mora', d:'Comuna Oriente — verificar estado antes de ir', lat:4.80731, lng:-75.67048, status:'check'}
   ],
   alerts: [
-    {title:'No ingresar al centro de Pereira.', text:'El centro permanece acordonado y hay estructuras en riesgo. Mantenga libres las rutas de rescate y verifique las restricciones vigentes con la Alcaldía.'},
+    {title:'Cerco de emergencia en el centro de Pereira.', text:'La Alcaldía restringió la circulación vehicular y peatonal entre carreras 4 y 10, desde la calle 14 hasta la calle 28. Evite la zona y facilite las labores de emergencia.', restrictionId:'centro-emergency-cordon-2026-08-13'},
     {title:'Precaución en la zona del Estadio Hernán Ramírez Villegas y alrededores.', text:'Se reportaron muros en riesgo. Verifique la información oficial y la ruta de acceso antes de transitar por el sector.'}
   ],
   news: [
