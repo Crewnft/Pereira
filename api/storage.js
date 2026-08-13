@@ -1,3 +1,6 @@
+const ALLOWED_KEYS = new Set(['acopio-reports', 'riesgo-reports']);
+const MAX_VALUE_BYTES = 250000;
+
 function resolveRedisConfig() {
   const pairs = [
     ['UPSTASH_REDIS_REST_URL', 'UPSTASH_REDIS_REST_TOKEN'],
@@ -6,39 +9,32 @@ function resolveRedisConfig() {
   ];
   for (const [urlKey, tokenKey] of pairs) {
     if (process.env[urlKey] && process.env[tokenKey]) {
-      return { url: process.env[urlKey], token: process.env[tokenKey], usedKeys: [urlKey, tokenKey] };
+      return { url: process.env[urlKey], token: process.env[tokenKey] };
     }
   }
   return null;
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  const config = resolveRedisConfig();
+function allowedKey(key) {
+  return typeof key === 'string' && ALLOWED_KEYS.has(key);
+}
 
-  if (!config) {
-    const present = Object.keys(process.env).filter(k => /REDIS|KV|UPSTASH/i.test(k));
-    return res.status(500).json({
-      error: 'No se encontro una base de datos Redis conectada a este proyecto.',
-      envVarsFound: present
-    });
-  }
+export default async function handler(req, res) {
+  const config = resolveRedisConfig();
+  if (!config) return res.status(500).json({ error: 'Redis no configurado.' });
 
   if (req.method === 'GET') {
     const { key } = req.query;
-    if (!key) return res.status(400).json({ error: 'key required' });
+    if (!allowedKey(key)) return res.status(400).json({ error: 'invalid key' });
     try {
       const r = await fetch(`${config.url}/get/${encodeURIComponent(key)}`, {
         headers: { Authorization: `Bearer ${config.token}` }
       });
-      if (!r.ok) {
-        const txt = await r.text();
-        return res.status(502).json({ error: 'upstash error', status: r.status, detail: txt, usedKeys: config.usedKeys });
-      }
+      if (!r.ok) return res.status(502).json({ error: 'storage error' });
       const d = await r.json();
       return res.status(200).json({ value: d.result ?? null });
-    } catch (e) {
-      return res.status(500).json({ error: 'redis unreachable', detail: String(e) });
+    } catch {
+      return res.status(500).json({ error: 'storage unavailable' });
     }
   }
 
@@ -48,21 +44,21 @@ export default async function handler(req, res) {
       try { body = JSON.parse(body); } catch { body = {}; }
     }
     const { key, value } = body || {};
-    if (!key) return res.status(400).json({ error: 'key required' });
+    if (!allowedKey(key)) return res.status(400).json({ error: 'invalid key' });
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+    if (Buffer.byteLength(serialized || '', 'utf8') > MAX_VALUE_BYTES) {
+      return res.status(413).json({ error: 'payload too large' });
+    }
     try {
       const r = await fetch(`${config.url}/set/${encodeURIComponent(key)}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${config.token}`, 'Content-Type': 'text/plain' },
-        body: typeof value === 'string' ? value : JSON.stringify(value)
+        body: serialized
       });
-      if (!r.ok) {
-        const txt = await r.text();
-        return res.status(502).json({ error: 'upstash error', status: r.status, detail: txt, usedKeys: config.usedKeys });
-      }
-      const d = await r.json();
-      return res.status(200).json({ ok: true, result: d.result });
-    } catch (e) {
-      return res.status(500).json({ error: 'redis unreachable', detail: String(e) });
+      if (!r.ok) return res.status(502).json({ error: 'storage error' });
+      return res.status(200).json({ ok: true });
+    } catch {
+      return res.status(500).json({ error: 'storage unavailable' });
     }
   }
 
