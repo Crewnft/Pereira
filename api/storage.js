@@ -1,4 +1,4 @@
-const ALLOWED_KEYS = new Set(['acopio-reports', 'riesgo-reports']);
+const ALLOWED_KEYS = new Set(['acopio-reports', 'riesgo-reports', 'comercio-reports']);
 const MAX_VALUE_BYTES = 250000;
 
 function resolveRedisConfig() {
