@@ -102,14 +102,8 @@
   function nearbyCandidates() {
     return [
       ...data.acopio.map(item => ({ ...item, icon: '📦', type: 'Centro de acopio' })),
-      ...data.shelters.map(item => ({ ...item, icon: '🛟', type: 'Albergue' })),
-      ...data.hospitals.map(item => ({ ...item, icon: '🏥', type: 'Hospital' })),
-      ...data.zones.map(item => ({ ...item, icon: '⚠️', type: 'Alerta / zona afectada' }))
-    ].concat(Object.values(reports).flat().filter(validCoordinates).map(item => ({
-      ...item, n: reportTitle(item), d: `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`,
-      icon: item.type === 'acopio' ? '📍' : '⚠️',
-      type: item.type === 'acopio' ? 'Acopio comunitario' : 'Reporte de edificio'
-    })));
+      ...data.shelters.map(item => ({ ...item, icon: '🛟', type: 'Albergue' }))
+    ];
   }
 
   function renderNearby(position) {
@@ -117,8 +111,8 @@
       .filter(item => item.distance <= NEARBY_RADIUS_KM).sort((a, b) => a.distance - b.distance);
     const results = byId('nearbyResults');
     results.hidden = false;
-    results.innerHTML = `<div class="nearby-head"><b>Ayuda y alertas a 3 km</b><button onclick="clearNearby()">Mostrar todo</button></div>` +
-      (nearby.length ? nearby.map(item => `<button class="nearby-item" onclick="focusNearby(${Number(item.lat)},${Number(item.lng)})"><span class="nearby-icon">${item.icon}</span><span><b>${escapeHtml(item.n)}</b><small>${escapeHtml(item.type)} · ${escapeHtml(item.d || '')}</small></span><strong>${item.distance.toFixed(1).replace('.', ',')} km</strong></button>`).join('') :
+    results.innerHTML = `<div class="nearby-head"><b>Ayuda a menos de 3 km</b><button aria-label="Cerrar lista" onclick="clearNearby()">×</button></div>` +
+      (nearby.length ? nearby.map(item => `<article class="nearby-item"><button class="nearby-focus" onclick="focusNearby(${Number(item.lat)},${Number(item.lng)})"><span class="nearby-icon">${item.icon}</span><span><b>${escapeHtml(item.n)}</b><small>${escapeHtml(item.type)} · ${escapeHtml(item.d || '')}</small></span><strong>${item.distance.toFixed(1).replace('.', ',')} km</strong></button><a class="navigate-btn" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${Number(item.lat)},${Number(item.lng)}`)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a></article>`).join('') :
         '<div class="nearby-empty">No hay puntos registrados dentro de 3 km. Verifique los canales oficiales.</div>') +
       '<div class="nearby-note">Distancias en línea recta. La ruta puede estar bloqueada o no ser segura.</div>';
   }
@@ -150,6 +144,9 @@
     }
     button.disabled = true;
     button.textContent = '📍 Ubicando…';
+    const results = byId('nearbyResults');
+    results.hidden = false;
+    results.innerHTML = '<div class="nearby-loading">📍 Esperando permiso de ubicación…</div>';
     navigator.geolocation.getCurrentPosition(position => {
       const current = { lat: position.coords.latitude, lng: position.coords.longitude };
       locationLayer.clearLayers();
@@ -163,6 +160,7 @@
       button.disabled = false;
       button.textContent = '📍 Ver ayuda cerca de mí';
       const message = error.code === 1 ? 'No se concedió permiso para usar la ubicación.' : 'No fue posible obtener tu ubicación. Inténtalo de nuevo.';
+      results.hidden = true;
       alert(message);
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   };
