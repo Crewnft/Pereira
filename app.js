@@ -77,10 +77,13 @@
     if (!response.ok) throw new Error(`No se pudo guardar ${type}`);
   }
 
-  function marker(lat, lng, color, title, detail) {
+  function marker(lat, lng, color, title, detail, category) {
+    const tag = category
+      ? `<span class="map-tag">${escapeHtml(category)}</span>`
+      : '';
     return L.circleMarker([lat, lng], {
       radius: 7, color: '#10131A', weight: 2, fillColor: color, fillOpacity: 1
-    }).bindPopup(`<b>${escapeHtml(title)}</b><br>${escapeHtml(detail || '')}`);
+    }).bindPopup(`${tag}<b class="map-popup-title">${escapeHtml(title)}</b><br>${escapeHtml(detail || '')}`);
   }
 
   function initMap() {
@@ -89,10 +92,10 @@
       maxZoom: 19, attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d).addTo(map));
-    data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d).addTo(map));
-    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d).addTo(map));
-    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d).addTo(map));
+    data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d, '🏚️ Edificio / zona afectada').addTo(map));
+    data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d, '🏥 Hospital').addTo(map));
+    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio').addTo(map));
+    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(map));
     reportLayer = L.layerGroup().addTo(map);
 
     byId('legend').innerHTML = [
@@ -151,7 +154,8 @@
     reportLayer.clearLayers();
     Object.values(reports).flat().filter(validCoordinates).forEach(item => {
       marker(item.lat, item.lng, item.type === 'acopio' ? COLORS.acopio : COLORS.riesgo,
-        reportTitle(item), `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`).addTo(reportLayer);
+        reportTitle(item), `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`,
+        item.type === 'acopio' ? '📍 Acopio comunitario' : '⚠️ Reporte de edificio').addTo(reportLayer);
     });
   }
 
