@@ -12,9 +12,10 @@
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
   const COLORS = {
     acopio: '#4C8DFF', riesgo: '#E4483C', zona: '#E8B339',
-    hospital: '#D86EFF', albergue: '#35C48B', comercio: '#FF8A4C'
+    hospital: '#D86EFF', albergue: '#35C48B', comercio: '#FF8A4C', oficial: '#FF3158'
   };
   const MAP_CATEGORIES = [
+    ['oficial', '🚨', 'Cerco oficial'],
     ['zona', '🏚️', 'Zonas'], ['hospital', '🏥', 'Hospitales'],
     ['acopio', '📦', 'Acopios'], ['albergue', '🛟', 'Albergues'],
     ['riesgo', '⚠️', 'Reportes'], ['comercio', '🛒', 'Comercios']
@@ -241,6 +242,11 @@
     }).addTo(map);
 
     MAP_CATEGORIES.forEach(([key]) => { categoryLayers[key] = L.layerGroup().addTo(map); });
+    (data.officialRestrictions || []).forEach(item => {
+      L.polygon(item.bounds, { color: COLORS.oficial, weight: 3, dashArray: '8 5', fillColor: COLORS.oficial, fillOpacity: .18 })
+        .bindPopup(`<span class="map-tag official-tag">🚨 Restricción oficial</span><b class="map-popup-title">${escapeHtml(item.n)}</b><br>${escapeHtml(item.d)}<small class="restriction-source">${escapeHtml(item.source)}</small>`)
+        .addTo(categoryLayers.oficial);
+    });
     data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d, '🏚️ Edificio / zona afectada').addTo(categoryLayers.zona));
     data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d, '🏥 Hospital').addTo(categoryLayers.hospital));
     data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio', true).addTo(categoryLayers.acopio));
@@ -254,7 +260,7 @@
     });
 
     byId('legend').innerHTML = [
-      ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
+      ['oficial', 'Cerco oficial'], ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
       ['albergue', 'Albergue'], ['riesgo', 'Reporte'], ['comercio', 'Comercio reportado']
     ].map(([key, label]) => `<span><i class="dot" style="background:${COLORS[key]}"></i>${label}</span>`).join('');
     byId('mapFilters').innerHTML = MAP_CATEGORIES.map(([key, emoji, label]) =>
@@ -330,7 +336,7 @@
 
   function renderStaticContent() {
     byId('officialAlerts').innerHTML = '<div class="ah"><span>Alertas oficiales reportadas</span><span>Verifique vigencia</span></div>' +
-      data.alerts.map(item => `<div class="alertitem"><b>${escapeHtml(item.title)}</b> ${escapeHtml(item.text)}</div>`).join('');
+      data.alerts.map(item => `<div class="alertitem"><b>${escapeHtml(item.title)}</b> ${escapeHtml(item.text)}${item.restrictionId ? `<button class="alert-map-button" onclick="focusOfficialRestriction('${escapeHtml(item.restrictionId)}')">🗺️ Ver cerco en el mapa</button>` : ''}</div>`).join('');
 
     byId('shelterList').innerHTML = data.shelters.map(item => {
       const label = item.status === 'ok' ? 'Disponible' : item.status === 'full' ? 'Aforo límite' : 'Verificar';
@@ -347,6 +353,14 @@
       `<article class="newsitem"><div class="nh"><span class="src">${escapeHtml(item.src)}</span><span>${escapeHtml(item.date)}</span></div><p>${escapeHtml(item.text)}</p></article>`
     ).join('');
   }
+
+  window.focusOfficialRestriction = function (id) {
+    const item = (data.officialRestrictions || []).find(restriction => restriction.id === id);
+    if (!item || !map) return;
+    if (!map.hasLayer(categoryLayers.oficial)) window.toggleMapFilter('oficial');
+    map.fitBounds(item.bounds, { padding: [24, 24] });
+    window.scrollTo({ top: byId('map').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+  };
 
   window.openNeedsForm = function (id) {
     const shelter = data.shelters.find(item => shelterId(item) === id);
