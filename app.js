@@ -17,7 +17,7 @@
     ['riesgo', '⚠️', 'Reportes'], ['comercio', '🛒', 'Comercios']
   ];
 
-  let activeTab = 'acopio';
+  let activeTab = 'todos';
   let reports = { acopio: [], riesgo: [], comercio: [] };
   let map;
   let categoryLayers = {};
@@ -314,6 +314,11 @@
     return `<div class="commerce-details"><span>${escapeHtml(commerceCategory(item))}</span>${item.hours ? `<span>🕐 ${escapeHtml(item.hours)}</span>` : ''}${item.products ? `<span>📦 ${escapeHtml(item.products)}</span>` : ''}${item.payment ? `<span>💳 ${escapeHtml(item.payment)}</span>` : ''}<small>Disponibilidad reportada; puede cambiar rápidamente.</small></div>`;
   }
 
+  function reportTypeLabel(type) {
+    const labels = { acopio: '📦 Acopio', riesgo: '⚠️ Edificio en riesgo', comercio: '🛒 Comercio abierto' };
+    return labels[type] || '📍 Reporte';
+  }
+
   function formatDate(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return 'Fecha no disponible';
@@ -329,7 +334,9 @@
   }
 
   function renderReports() {
-    const list = reports[activeTab];
+    const list = (activeTab === 'todos' ? Object.values(reports).flat() : reports[activeTab] || [])
+      .slice().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    byId('tabTodos').classList.toggle('active', activeTab === 'todos');
     byId('tabAcopio').classList.toggle('active', activeTab === 'acopio');
     byId('tabRiesgo').classList.toggle('active', activeTab === 'riesgo');
     byId('tabComercio').classList.toggle('active', activeTab === 'comercio');
@@ -340,12 +347,13 @@
       const alreadyConfirmed = locallyConfirmed(item.type, item.id);
       return `
       <article class="card">
+        <div class="report-category ${escapeHtml(item.type)}">${escapeHtml(reportTypeLabel(item.type))}</div>
         <div class="head"><div><div class="title">${escapeHtml(reportTitle(item))}</div><div class="addr">${escapeHtml(item.address)}${item.barrio ? ` · ${escapeHtml(item.barrio)}` : ''}</div></div><div class="status-stack"><span class="status ${statusClass}">${statusLabel}</span>${freshness ? `<span class="freshness ${freshness.className}">${freshness.label}</span>` : ''}</div></div>
         ${item.description ? `<div class="desc">${escapeHtml(item.description)}</div>` : ''}
         ${commerceDetail(item)}
         <div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${validCoordinates(item) ? `<button class="mini" onclick="showReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">Ver mapa</button>${item.type === 'comercio' ? `<a class="mini mini-link" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${item.lat},${item.lng}`)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>` : ''}` : ''}<button class="mini" ${alreadyConfirmed ? 'disabled' : ''} onclick="confirmReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">${alreadyConfirmed ? '✓ Ya confirmaste' : `✓ Confirmar (${item.confirmations}/5)`}</button></div></div>
       </article>`;
-    }).join('') : '<div class="empty">Todavía no hay reportes comunitarios en esta categoría.</div>';
+    }).join('') : `<div class="empty">${activeTab === 'todos' ? 'Todavía no hay reportes comunitarios.' : 'Todavía no hay reportes comunitarios en esta categoría.'}</div>`;
     updateStats();
     renderReportMarkers();
   }
@@ -382,7 +390,7 @@
   }
 
   window.switchTab = function (type) {
-    if (!STORAGE_KEYS[type]) return;
+    if (type !== 'todos' && !STORAGE_KEYS[type]) return;
     activeTab = type;
     renderReports();
   };
@@ -496,7 +504,7 @@
     reports[formType].unshift(item);
     try {
       await writeReports(formType);
-      activeTab = formType;
+      activeTab = 'todos';
       closeForm();
       renderReports();
     } catch (error) {
