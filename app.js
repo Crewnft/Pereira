@@ -4,14 +4,14 @@
   const data = window.PEREIRA_DATA;
   const STORAGE_URL = '/api/storage';
   const NEARBY_RADIUS_KM = 3;
-  const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports' };
+  const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
   const COLORS = {
     acopio: '#4C8DFF', riesgo: '#E4483C', zona: '#E8B339',
-    hospital: '#D86EFF', albergue: '#35C48B'
+    hospital: '#D86EFF', albergue: '#35C48B', comercio: '#FF8A4C'
   };
 
   let activeTab = 'acopio';
-  let reports = { acopio: [], riesgo: [] };
+  let reports = { acopio: [], riesgo: [], comercio: [] };
   let map;
   let reportLayer;
   let locationLayer;
@@ -47,6 +47,11 @@
       need: String(item.need || '').trim(),
       severity: String(item.severity || item.sev || '').trim(),
       description: String(item.description || item.desc || '').trim(),
+      name: String(item.name || '').trim(),
+      category: String(item.category || '').trim(),
+      hours: String(item.hours || '').trim(),
+      products: String(item.products || '').trim(),
+      payment: String(item.payment || '').trim(),
       lat: validCoordinates(item) ? Number(item.lat) : null,
       lng: validCoordinates(item) ? Number(item.lng) : null,
       createdAt: item.createdAt || item.created || new Date().toISOString(),
@@ -161,7 +166,7 @@
 
     byId('legend').innerHTML = [
       ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
-      ['albergue', 'Albergue'], ['riesgo', 'Reporte']
+      ['albergue', 'Albergue'], ['riesgo', 'Reporte'], ['comercio', 'Comercio reportado']
     ].map(([key, label]) => `<span><i class="dot" style="background:${COLORS[key]}"></i>${label}</span>`).join('');
   }
 
@@ -240,8 +245,19 @@
 
   function reportTitle(item) {
     if (item.type === 'acopio') return item.need || 'Punto de acopio comunitario';
+    if (item.type === 'comercio') return item.name || 'Comercio abierto reportado';
     const labels = { grietas: 'Grietas visibles', inclinado: 'Estructura inclinada', colapso_parcial: 'Colapso parcial', otro: 'Otro riesgo' };
     return labels[item.severity] || 'Edificio en riesgo';
+  }
+
+  function commerceCategory(item) {
+    const labels = { supermercado: '🛒 Supermercado', tienda: '🏪 Tienda', farmacia: '💊 Farmacia', combustible: '⛽ Estación de servicio', alimentos: '🍞 Alimentos', otro: '📍 Comercio esencial' };
+    return labels[item.category] || labels.otro;
+  }
+
+  function commerceDetail(item) {
+    if (item.type !== 'comercio') return '';
+    return `<div class="commerce-details"><span>${escapeHtml(commerceCategory(item))}</span>${item.hours ? `<span>🕐 ${escapeHtml(item.hours)}</span>` : ''}${item.products ? `<span>📦 ${escapeHtml(item.products)}</span>` : ''}${item.payment ? `<span>💳 ${escapeHtml(item.payment)}</span>` : ''}<small>Disponibilidad reportada; puede cambiar rápidamente.</small></div>`;
   }
 
   function formatDate(value) {
@@ -250,16 +266,29 @@
     return date.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
   }
 
+  function commerceFreshness(item) {
+    if (item.type !== 'comercio') return null;
+    const ageHours = (Date.now() - new Date(item.createdAt).getTime()) / 3600000;
+    if (!Number.isFinite(ageHours) || ageHours >= 48) return { label: 'Reporte vencido', className: 'expired' };
+    if (ageHours >= 24) return { label: 'Reconfirmar apertura', className: 'stale' };
+    return { label: 'Abierto recientemente', className: 'recent' };
+  }
+
   function renderReports() {
     const list = reports[activeTab];
     byId('tabAcopio').classList.toggle('active', activeTab === 'acopio');
     byId('tabRiesgo').classList.toggle('active', activeTab === 'riesgo');
-    byId('list').innerHTML = list.length ? list.map(item => `
+    byId('tabComercio').classList.toggle('active', activeTab === 'comercio');
+    byId('list').innerHTML = list.length ? list.map(item => {
+      const freshness = commerceFreshness(item);
+      return `
       <article class="card">
-        <div class="head"><div><div class="title">${escapeHtml(reportTitle(item))}</div><div class="addr">${escapeHtml(item.address)}${item.barrio ? ` · ${escapeHtml(item.barrio)}` : ''}</div></div><span class="status ${item.verified ? 'verified' : 'unverified'}">${item.verified ? 'Verificado' : 'Sin verificar'}</span></div>
+        <div class="head"><div><div class="title">${escapeHtml(reportTitle(item))}</div><div class="addr">${escapeHtml(item.address)}${item.barrio ? ` · ${escapeHtml(item.barrio)}` : ''}</div></div><div class="status-stack"><span class="status ${item.verified ? 'verified' : 'unverified'}">${item.verified ? 'Verificado' : 'Sin verificar'}</span>${freshness ? `<span class="freshness ${freshness.className}">${freshness.label}</span>` : ''}</div></div>
         ${item.description ? `<div class="desc">${escapeHtml(item.description)}</div>` : ''}
-        <div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${validCoordinates(item) ? `<button class="mini" onclick="showReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">Ver mapa</button>` : ''}<button class="mini" onclick="confirmReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">✓ Confirmar (${item.confirmations})</button></div></div>
-      </article>`).join('') : '<div class="empty">Todavía no hay reportes comunitarios en esta categoría.</div>';
+        ${commerceDetail(item)}
+        <div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${validCoordinates(item) ? `<button class="mini" onclick="showReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">Ver mapa</button>${item.type === 'comercio' ? `<a class="mini mini-link" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${item.lat},${item.lng}`)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>` : ''}` : ''}<button class="mini" onclick="confirmReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">✓ Confirmar (${item.confirmations})</button></div></div>
+      </article>`;
+    }).join('') : '<div class="empty">Todavía no hay reportes comunitarios en esta categoría.</div>';
     updateStats();
     renderReportMarkers();
   }
@@ -267,17 +296,18 @@
   function renderReportMarkers() {
     if (!reportLayer) return;
     reportLayer.clearLayers();
-    Object.values(reports).flat().filter(validCoordinates).forEach(item => {
-      marker(item.lat, item.lng, item.type === 'acopio' ? COLORS.acopio : COLORS.riesgo,
+    Object.values(reports).flat().filter(item => validCoordinates(item) && (!commerceFreshness(item) || commerceFreshness(item).className !== 'expired')).forEach(item => {
+      marker(item.lat, item.lng, COLORS[item.type] || COLORS.riesgo,
         reportTitle(item), `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`,
-        item.type === 'acopio' ? '📍 Acopio comunitario' : '⚠️ Reporte de edificio').addTo(reportLayer);
+        item.type === 'acopio' ? '📍 Acopio comunitario' : item.type === 'comercio' ? commerceCategory(item) : '⚠️ Reporte de edificio').addTo(reportLayer);
     });
   }
 
   function updateStats() {
-    const all = reports.acopio.concat(reports.riesgo);
+    const all = reports.acopio.concat(reports.riesgo, reports.comercio);
     byId('statAcopio').textContent = data.acopio.length + reports.acopio.length;
     byId('statRiesgo').textContent = data.zones.length + reports.riesgo.length;
+    byId('statComercio').textContent = reports.comercio.length;
     byId('statVerif').textContent = all.filter(item => item.verified).length;
     byId('statConfirm').textContent = all.reduce((sum, item) => sum + item.confirmations, 0);
     byId('updatedAt').textContent = `Actualizado ${new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`;
@@ -311,7 +341,7 @@
   };
 
   function resetForm() {
-    ['f_addr', 'f_barrio', 'f_need', 'f_desc'].forEach(id => { byId(id).value = ''; });
+    ['f_name', 'f_addr', 'f_barrio', 'f_need', 'f_hours', 'f_products', 'f_payment', 'f_desc'].forEach(id => { byId(id).value = ''; });
     byId('f_sev').value = 'grietas';
     pickedLocation = null;
     byId('pickhint').textContent = 'Sin marcar — se usará solo la dirección escrita.';
@@ -323,11 +353,14 @@
     formType = type;
     resetForm();
     const isAcopio = type === 'acopio';
-    byId('formTitle').textContent = isAcopio ? 'Reportar punto de acopio' : 'Reportar edificio en riesgo';
-    byId('formHint').textContent = isAcopio ? 'Indica qué se recibe o necesita y cómo encontrar el punto.' : 'No ingreses a la estructura. Describe únicamente lo que observaste desde un lugar seguro.';
+    const isCommerce = type === 'comercio';
+    byId('formTitle').textContent = isAcopio ? 'Reportar punto de acopio' : isCommerce ? 'Reportar comercio abierto' : 'Reportar edificio en riesgo';
+    byId('formHint').textContent = isAcopio ? 'Indica qué se recibe o necesita y cómo encontrar el punto.' : isCommerce ? 'Reporta únicamente un establecimiento que hayas visto funcionando recientemente. La disponibilidad puede cambiar.' : 'No ingreses a la estructura. Describe únicamente lo que observaste desde un lugar seguro.';
+    byId('f_nameBlock').style.display = isCommerce ? '' : 'none';
     byId('f_needBlock').style.display = isAcopio ? '' : 'none';
-    byId('f_sevBlock').style.display = isAcopio ? 'none' : '';
-    byId('submitBtn').style.background = isAcopio ? COLORS.acopio : COLORS.riesgo;
+    byId('f_sevBlock').style.display = isAcopio || isCommerce ? 'none' : '';
+    byId('f_commerceBlock').style.display = isCommerce ? '' : 'none';
+    byId('submitBtn').style.background = COLORS[type];
     byId('overlay').style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
@@ -355,8 +388,10 @@
   window.submitForm = async function () {
     const address = byId('f_addr').value.trim();
     const need = byId('f_need').value.trim();
-    if (!address || (formType === 'acopio' && !need)) {
-      alert('Completa los campos obligatorios.');
+    const name = byId('f_name').value.trim();
+    if (!address || (formType === 'acopio' && !need) || (formType === 'comercio' && (!name || !pickedLocation))) {
+      if (formType === 'comercio' && !pickedLocation) alert('Marca la ubicación del comercio en el mapa para poder mostrarlo y ofrecer navegación.');
+      else alert('Completa los campos obligatorios.');
       return;
     }
 
@@ -371,6 +406,11 @@
       need: formType === 'acopio' ? need : '',
       severity: formType === 'riesgo' ? byId('f_sev').value : '',
       description: byId('f_desc').value.trim(),
+      name: formType === 'comercio' ? name : '',
+      category: formType === 'comercio' ? byId('f_category').value : '',
+      hours: formType === 'comercio' ? byId('f_hours').value.trim() : '',
+      products: formType === 'comercio' ? byId('f_products').value.trim() : '',
+      payment: formType === 'comercio' ? byId('f_payment').value.trim() : '',
       lat: pickedLocation ? pickedLocation.lat : null,
       lng: pickedLocation ? pickedLocation.lng : null,
       createdAt: new Date().toISOString(), verified: false, confirmations: 0
@@ -397,9 +437,10 @@
     initMap();
     renderReports();
     try {
-      const loaded = await Promise.all([readReports('acopio'), readReports('riesgo')]);
+      const loaded = await Promise.all([readReports('acopio'), readReports('riesgo'), readReports('comercio')]);
       reports.acopio = loaded[0];
       reports.riesgo = loaded[1];
+      reports.comercio = loaded[2];
       renderReports();
     } catch (error) {
       console.warn('Los reportes comunitarios no están disponibles.', error);
