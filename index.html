@@ -95,6 +95,16 @@
     </div>
   </div>
 
+  <div class="overlay" id="needsOverlay" style="display:none">
+    <div class="sheet needs-sheet">
+      <h2>Actualizar necesidades</h2>
+      <p class="hint" id="needsShelterName"></p>
+      <p class="needs-warning">Selecciona únicamente lo que verificaste que hace falta ahora. La actualización vencerá en 12 horas.</p>
+      <div class="need-picker" id="needPicker"></div>
+      <div class="submitrow"><button class="cancel" onclick="closeNeedsForm()">Cancelar</button><button class="confirm needs-confirm" id="needsSubmitBtn" onclick="submitShelterNeeds()">Publicar actualización</button></div>
+    </div>
+  </div>
+
   <script src="/data.js"></script>
   <script src="/app.js"></script>
 </body>
