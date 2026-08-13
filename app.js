@@ -19,6 +19,8 @@
   let pickMarker;
   let pickedLocation = null;
   let formType = 'acopio';
+  let locationRequest = 0;
+  let manualLocationMode = false;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -117,6 +119,27 @@
       '<div class="nearby-note">Distancias en línea recta. La ruta puede estar bloqueada o no ser segura.</div>';
   }
 
+  function applyNearbyLocation(current, approximate) {
+    locationLayer.clearLayers();
+    L.circle(current, { radius: NEARBY_RADIUS_KM * 1000, color: COLORS.acopio, weight: 2, fillColor: COLORS.acopio, fillOpacity: .08 }).addTo(locationLayer);
+    L.circleMarker(current, { radius: 8, color: '#fff', weight: 3, fillColor: COLORS.acopio, fillOpacity: 1 })
+      .bindPopup(`<b>📍 ${approximate ? 'Ubicación seleccionada' : 'Tu ubicación aproximada'}</b><br>No se guarda ni se comparte.`).addTo(locationLayer);
+    map.fitBounds(L.circle(current, { radius: NEARBY_RADIUS_KM * 1000 }).getBounds(), { padding: [18, 18] });
+    renderNearby(current);
+    const button = byId('nearbyBtn');
+    button.disabled = false;
+    button.textContent = '✓ Ubicación activada';
+  }
+
+  function showLocationFallback(message) {
+    const button = byId('nearbyBtn');
+    button.disabled = false;
+    button.textContent = '📍 Ver ayuda cerca de mí';
+    const results = byId('nearbyResults');
+    results.hidden = false;
+    results.innerHTML = `<div class="nearby-head"><b>No pudimos ubicarte</b><button aria-label="Cerrar lista" onclick="clearNearby()">×</button></div><div class="nearby-empty">${escapeHtml(message)}</div><div class="nearby-fallback"><button onclick="findNearby()">Reintentar</button><button onclick="pickNearbyLocation()">Elegir en el mapa</button></div>`;
+  }
+
   function initMap() {
     map = L.map('map', { zoomControl: true }).setView(data.center, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -129,6 +152,12 @@
     data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(map));
     reportLayer = L.layerGroup().addTo(map);
     locationLayer = L.layerGroup().addTo(map);
+    map.on('click', event => {
+      if (!manualLocationMode) return;
+      manualLocationMode = false;
+      map.getContainer().classList.remove('picking-location');
+      applyNearbyLocation({ lat: event.latlng.lat, lng: event.latlng.lng }, true);
+    });
 
     byId('legend').innerHTML = [
       ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
@@ -137,6 +166,7 @@
   }
 
   window.findNearby = function () {
+    const request = ++locationRequest;
     const button = byId('nearbyBtn');
     if (!navigator.geolocation) {
       alert('Este navegador no permite obtener la ubicación.');
@@ -147,25 +177,37 @@
     const results = byId('nearbyResults');
     results.hidden = false;
     results.innerHTML = '<div class="nearby-loading">📍 Esperando permiso de ubicación…</div>';
+    const fallbackTimer = setTimeout(() => {
+      if (request !== locationRequest) return;
+      locationRequest += 1;
+      showLocationFallback('El navegador no respondió a tiempo, aunque el permiso puede estar activo. Puedes reintentar o marcar tu ubicación aproximada en el mapa.');
+    }, 12000);
     navigator.geolocation.getCurrentPosition(position => {
+      if (request !== locationRequest) return;
+      clearTimeout(fallbackTimer);
       const current = { lat: position.coords.latitude, lng: position.coords.longitude };
-      locationLayer.clearLayers();
-      L.circle(current, { radius: NEARBY_RADIUS_KM * 1000, color: COLORS.acopio, weight: 2, fillColor: COLORS.acopio, fillOpacity: .08 }).addTo(locationLayer);
-      L.circleMarker(current, { radius: 8, color: '#fff', weight: 3, fillColor: COLORS.acopio, fillOpacity: 1 }).bindPopup('<b>📍 Tu ubicación aproximada</b><br>No se guarda ni se comparte.').addTo(locationLayer);
-      map.fitBounds(L.circle(current, { radius: NEARBY_RADIUS_KM * 1000 }).getBounds(), { padding: [18, 18] });
-      renderNearby(current);
-      button.disabled = false;
-      button.textContent = '✓ Ubicación activada';
+      applyNearbyLocation(current, false);
     }, error => {
+      if (request !== locationRequest) return;
+      clearTimeout(fallbackTimer);
       button.disabled = false;
       button.textContent = '📍 Ver ayuda cerca de mí';
       const message = error.code === 1 ? 'No se concedió permiso para usar la ubicación.' : 'No fue posible obtener tu ubicación. Inténtalo de nuevo.';
-      results.hidden = true;
-      alert(message);
+      showLocationFallback(message);
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
   };
 
+  window.pickNearbyLocation = function () {
+    locationRequest += 1;
+    manualLocationMode = true;
+    byId('nearbyResults').innerHTML = '<div class="nearby-loading">📌 Toca tu ubicación aproximada en el mapa.</div>';
+    map.getContainer().classList.add('picking-location');
+  };
+
   window.clearNearby = function () {
+    locationRequest += 1;
+    manualLocationMode = false;
+    map.getContainer().classList.remove('picking-location');
     locationLayer.clearLayers();
     byId('nearbyResults').hidden = true;
     byId('nearbyBtn').textContent = '📍 Ver ayuda cerca de mí';
