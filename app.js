@@ -118,13 +118,20 @@
     } catch { /* La cookie segura del servidor sigue siendo la fuente de verdad. */ }
   }
 
-  function marker(lat, lng, color, title, detail, category) {
+  function directionsUrl(lat, lng) {
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${Number(lat)},${Number(lng)}`)}`;
+  }
+
+  function marker(lat, lng, color, title, detail, category, navigable) {
     const tag = category
       ? `<span class="map-tag">${escapeHtml(category)}</span>`
       : '';
+    const directions = navigable
+      ? `<a class="popup-navigate" href="${directionsUrl(lat, lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>`
+      : '';
     return L.circleMarker([lat, lng], {
       radius: 7, color: '#10131A', weight: 2, fillColor: color, fillOpacity: 1
-    }).bindPopup(`${tag}<b class="map-popup-title">${escapeHtml(title)}</b><br>${escapeHtml(detail || '')}`);
+    }).bindPopup(`${tag}<b class="map-popup-title">${escapeHtml(title)}</b><br>${escapeHtml(detail || '')}${directions}`);
   }
 
   function distanceKm(from, to) {
@@ -186,8 +193,8 @@
     MAP_CATEGORIES.forEach(([key]) => { categoryLayers[key] = L.layerGroup().addTo(map); });
     data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d, '🏚️ Edificio / zona afectada').addTo(categoryLayers.zona));
     data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d, '🏥 Hospital').addTo(categoryLayers.hospital));
-    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio').addTo(categoryLayers.acopio));
-    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(categoryLayers.albergue));
+    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio', true).addTo(categoryLayers.acopio));
+    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue', true).addTo(categoryLayers.albergue));
     locationLayer = L.layerGroup().addTo(map);
     map.on('click', event => {
       if (!manualLocationMode) return;
@@ -278,11 +285,11 @@
     byId('shelterList').innerHTML = data.shelters.map(item => {
       const label = item.status === 'ok' ? 'Disponible' : item.status === 'full' ? 'Aforo límite' : 'Verificar';
       const severityClass = item.status === 'ok' ? 'alto' : '';
-      return `<div class="zone ${severityClass}"><div><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div></div><span class="tag">${label}</span></div>`;
+      return `<div class="zone ${severityClass}"><div><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div></div><div class="zone-actions"><span class="tag">${label}</span><a class="zone-nav" href="${directionsUrl(item.lat, item.lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a></div></div>`;
     }).join('');
 
     byId('acopioList').innerHTML = data.acopio.map(item =>
-      `<div class="zone alto"><div><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div></div><span class="tag">Acopio</span></div>`
+      `<div class="zone alto"><div><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div></div><div class="zone-actions"><span class="tag">Acopio</span><a class="zone-nav" href="${directionsUrl(item.lat, item.lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a></div></div>`
     ).join('');
 
     byId('newsList').innerHTML = data.news.map(item =>
