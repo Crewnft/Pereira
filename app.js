@@ -11,11 +11,17 @@
     acopio: '#4C8DFF', riesgo: '#E4483C', zona: '#E8B339',
     hospital: '#D86EFF', albergue: '#35C48B', comercio: '#FF8A4C'
   };
+  const MAP_CATEGORIES = [
+    ['zona', '🏚️', 'Zonas'], ['hospital', '🏥', 'Hospitales'],
+    ['acopio', '📦', 'Acopios'], ['albergue', '🛟', 'Albergues'],
+    ['riesgo', '⚠️', 'Reportes'], ['comercio', '🛒', 'Comercios']
+  ];
 
   let activeTab = 'acopio';
   let reports = { acopio: [], riesgo: [], comercio: [] };
   let map;
-  let reportLayer;
+  let categoryLayers = {};
+  let reportMarkers = [];
   let locationLayer;
   let pickMap;
   let pickMarker;
@@ -177,11 +183,11 @@
       maxZoom: 19, attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d, '🏚️ Edificio / zona afectada').addTo(map));
-    data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d, '🏥 Hospital').addTo(map));
-    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio').addTo(map));
-    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(map));
-    reportLayer = L.layerGroup().addTo(map);
+    MAP_CATEGORIES.forEach(([key]) => { categoryLayers[key] = L.layerGroup().addTo(map); });
+    data.zones.forEach(item => marker(item.lat, item.lng, COLORS.zona, item.n, item.d, '🏚️ Edificio / zona afectada').addTo(categoryLayers.zona));
+    data.hospitals.forEach(item => marker(item.lat, item.lng, COLORS.hospital, item.n, item.d, '🏥 Hospital').addTo(categoryLayers.hospital));
+    data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio').addTo(categoryLayers.acopio));
+    data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(categoryLayers.albergue));
     locationLayer = L.layerGroup().addTo(map);
     map.on('click', event => {
       if (!manualLocationMode) return;
@@ -194,7 +200,22 @@
       ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
       ['albergue', 'Albergue'], ['riesgo', 'Reporte'], ['comercio', 'Comercio reportado']
     ].map(([key, label]) => `<span><i class="dot" style="background:${COLORS[key]}"></i>${label}</span>`).join('');
+    byId('mapFilters').innerHTML = MAP_CATEGORIES.map(([key, emoji, label]) =>
+      `<button class="map-filter active" data-category="${key}" aria-pressed="true" onclick="toggleMapFilter('${key}')"><i style="background:${COLORS[key]}"></i><span>${emoji} ${label}</span></button>`
+    ).join('');
   }
+
+  window.toggleMapFilter = function (category) {
+    const layer = categoryLayers[category];
+    if (!layer) return;
+    const visible = map.hasLayer(layer);
+    if (visible) map.removeLayer(layer); else layer.addTo(map);
+    const button = byId('mapFilters').querySelector(`[data-category="${category}"]`);
+    if (button) {
+      button.classList.toggle('active', !visible);
+      button.setAttribute('aria-pressed', String(!visible));
+    }
+  };
 
   window.findNearby = function () {
     const request = ++locationRequest;
@@ -323,14 +344,25 @@
   }
 
   function renderReportMarkers() {
-    if (!reportLayer) return;
-    reportLayer.clearLayers();
+    if (!map) return;
+    reportMarkers.forEach(item => item.marker.removeFrom(categoryLayers[item.category]));
+    reportMarkers = [];
     Object.values(reports).flat().filter(item => validCoordinates(item) && (!commerceFreshness(item) || commerceFreshness(item).className !== 'expired')).forEach(item => {
-      marker(item.lat, item.lng, COLORS[item.type] || COLORS.riesgo,
+      const reportMarker = marker(item.lat, item.lng, COLORS[item.type] || COLORS.riesgo,
         reportTitle(item), `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`,
-        item.type === 'acopio' ? '📍 Acopio comunitario' : item.type === 'comercio' ? commerceCategory(item) : '⚠️ Reporte de edificio').addTo(reportLayer);
+        item.type === 'acopio' ? '📍 Acopio comunitario' : item.type === 'comercio' ? commerceCategory(item) : '⚠️ Reporte de edificio');
+      reportMarker.addTo(categoryLayers[item.type]);
+      reportMarkers.push({ marker: reportMarker, category: item.type });
     });
   }
+
+  window.toggleReportMenu = function () {
+    const actions = byId('reportActions');
+    const button = byId('reportToggle');
+    const open = actions.classList.toggle('open');
+    button.setAttribute('aria-expanded', String(open));
+    button.innerHTML = open ? '<span>×</span> Cerrar' : '<span>＋</span> Nuevo reporte';
+  };
 
   function updateStats() {
     const all = reports.acopio.concat(reports.riesgo, reports.comercio);
@@ -351,6 +383,7 @@
   window.showReport = function (type, id) {
     const item = reports[type] && reports[type].find(report => report.id === id);
     if (!item || !validCoordinates(item)) return;
+    if (categoryLayers[type] && !map.hasLayer(categoryLayers[type])) window.toggleMapFilter(type);
     map.setView([item.lat, item.lng], 17);
     window.scrollTo({ top: byId('map').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
   };
@@ -385,6 +418,9 @@
   window.openForm = function (type) {
     if (!STORAGE_KEYS[type]) return;
     formType = type;
+    byId('reportActions').classList.remove('open');
+    byId('reportToggle').setAttribute('aria-expanded', 'false');
+    byId('reportToggle').innerHTML = '<span>＋</span> Nuevo reporte';
     resetForm();
     const isAcopio = type === 'acopio';
     const isCommerce = type === 'comercio';
