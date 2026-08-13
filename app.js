@@ -6,6 +6,7 @@
   const CONFIRM_URL = '/api/confirm';
   const GEOCODE_URL = '/api/geocode';
   const SHELTER_NEEDS_URL = '/api/shelter-needs';
+  const MODERATOR_URL = '/api/moderator';
   const CONFIRMED_LOCAL_KEY = 'pereira-confirmed-reports-v1';
   const NEARBY_RADIUS_KM = 3;
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
@@ -37,6 +38,7 @@
   let locationRequest = 0;
   let manualLocationMode = false;
   let shelterNeeds = {};
+  let shelterNeedProposals = [];
   let editingShelterId = null;
 
   function byId(id) { return document.getElementById(id); }
@@ -151,9 +153,12 @@
 
   function shelterNeedsHtml(item) {
     const update = activeShelterUpdate(shelterId(item));
-    if (!update) return '<div class="needs-empty">Necesidades: sin reporte reciente</div>';
+    const pending = shelterNeedProposals.filter(proposal => proposal.shelterId === shelterId(item));
+    const pendingHtml = pending.map(proposal => `<div class="pending-needs"><b>Propuesta pendiente</b><span>${SHELTER_NEEDS.filter(([key]) => proposal.needs.includes(key)).map(([, emoji]) => emoji).join(' ')}</span><button onclick="confirmShelterNeeds('${proposal.id}')">✓ Confirmar (${proposal.confirmations}/5)</button></div>`).join('');
+    if (!update) return `<div class="needs-empty">Necesidades: sin reporte confirmado</div>${pendingHtml}`;
     const selected = new Set(update.needs);
-    return `<div class="needs-label">Necesidades · ${relativeUpdateTime(update.updatedAt)}</div><div class="needs-chips">${SHELTER_NEEDS.filter(([key]) => selected.has(key)).map(([, emoji, label]) => `<span>${emoji} ${escapeHtml(label)}</span>`).join('')}</div><small class="community-note">Reporte comunitario · verificar antes de donar</small>`;
+    const source = update.source === 'moderator-verified' ? 'Verificado por moderación' : 'Confirmado por la comunidad';
+    return `<div class="needs-label">Necesidades · ${relativeUpdateTime(update.updatedAt)}</div><div class="needs-chips">${SHELTER_NEEDS.filter(([key]) => selected.has(key)).map(([, emoji, label]) => `<span>${emoji} ${escapeHtml(label)}</span>`).join('')}</div><small class="community-note">${source} · verificar antes de donar</small>${pendingHtml}`;
   }
 
   async function loadShelterNeeds() {
@@ -161,6 +166,7 @@
     if (!response.ok) throw new Error('needs unavailable');
     const payload = await response.json();
     shelterNeeds = payload && payload.updates && typeof payload.updates === 'object' ? payload.updates : {};
+    shelterNeedProposals = Array.isArray(payload && payload.pending) ? payload.pending : [];
   }
 
   function marker(lat, lng, color, title, detail, category, navigable) {
@@ -365,18 +371,63 @@
     button.disabled = true;
     button.textContent = 'Publicando…';
     try {
-      const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shelterId: editingShelterId, needs }) });
+      const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'propose', shelterId: editingShelterId, needs }) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'No fue posible publicar la actualización.');
-      shelterNeeds[editingShelterId] = payload.update;
       closeNeedsForm();
+      await loadShelterNeeds();
       renderStaticContent();
+      alert('La propuesta quedó pendiente. Se publicará con 5 confirmaciones únicas o aprobación de moderación.');
     } catch (error) {
       alert(error.message || 'No fue posible publicar la actualización.');
     } finally {
       button.disabled = false;
       button.textContent = 'Publicar actualización';
     }
+  };
+
+  window.confirmShelterNeeds = async function (proposalId) {
+    try {
+      const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', proposalId }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'No fue posible confirmar.');
+      await loadShelterNeeds(); renderStaticContent();
+      if (!payload.added) alert('Este dispositivo ya había confirmado esta propuesta.');
+    } catch (error) { alert(error.message || 'No fue posible confirmar.'); }
+  };
+
+  function renderModeratorProposals() {
+    byId('moderatorProposals').innerHTML = shelterNeedProposals.length ? shelterNeedProposals.map(proposal => {
+      const shelter = data.shelters.find(item => shelterId(item) === proposal.shelterId);
+      const needs = SHELTER_NEEDS.filter(([key]) => proposal.needs.includes(key)).map(([, emoji, label]) => `${emoji} ${escapeHtml(label)}`).join(' · ');
+      return `<article class="moderator-proposal"><b>${escapeHtml(shelter ? shelter.n : proposal.shelterId)}</b><p>${needs}</p><small>${proposal.confirmations}/5 confirmaciones</small><div><button onclick="moderateShelterProposal('approve','${proposal.id}')">✓ Aprobar</button><button class="reject" onclick="moderateShelterProposal('reject','${proposal.id}')">× Rechazar</button></div></article>`;
+    }).join('') : '<div class="empty">No hay propuestas pendientes.</div>';
+  }
+
+  window.openModerator = async function () {
+    byId('moderatorOverlay').style.display = 'flex'; document.body.style.overflow = 'hidden';
+    try {
+      const response = await fetch(MODERATOR_URL, { cache: 'no-store' });
+      const payload = await response.json();
+      const authenticated = response.ok && payload.authenticated;
+      byId('moderatorLogin').style.display = authenticated ? 'none' : '';
+      byId('moderatorPanel').style.display = authenticated ? '' : 'none';
+      if (authenticated) { await loadShelterNeeds(); renderModeratorProposals(); }
+    } catch { byId('moderatorLogin').style.display = ''; }
+  };
+  window.closeModerator = function () { byId('moderatorOverlay').style.display = 'none'; document.body.style.overflow = ''; byId('moderatorPassword').value = ''; };
+  window.loginModerator = async function () {
+    const response = await fetch(MODERATOR_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: byId('moderatorPassword').value }) });
+    const payload = await response.json();
+    if (!response.ok) return alert(payload.error || 'No fue posible ingresar.');
+    byId('moderatorLogin').style.display = 'none'; byId('moderatorPanel').style.display = '';
+    await loadShelterNeeds(); renderModeratorProposals();
+  };
+  window.logoutModerator = async function () { await fetch(MODERATOR_URL, { method: 'DELETE' }); closeModerator(); };
+  window.moderateShelterProposal = async function (action, proposalId) {
+    const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, proposalId }) });
+    const payload = await response.json(); if (!response.ok) return alert(payload.error || 'No fue posible moderar.');
+    await loadShelterNeeds(); renderStaticContent(); renderModeratorProposals();
   };
 
   function reportTitle(item) {
