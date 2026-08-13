@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+  <title>Pereira Emergencia · Panel comunitario</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="top">
+      <h1><span class="pulse"></span>Pereira Emergencia <span class="crumb">/ Panel comunitario</span></h1>
+      <span class="updated mono" id="updatedAt">—</span>
+    </div>
+  </header>
+
+  <div class="official">
+    <strong>Canales oficiales — verificados</strong>
+    <div class="row"><a href="tel:3164781821">📞 Cruz Roja Pereira (desaparecidos): 316 478 1821</a></div>
+    <div class="row">
+      <a href="tel:3007616647">📞 PMU Asocapitales: 300 761 6647</a>
+      <a href="tel:6063248000">📞 Alcaldía: 606 324 8000</a>
+      <a href="tel:6063169024">🩸 Banco de sangre: 606 316 9024</a>
+    </div>
+    <div class="row">
+      <a href="https://www.asocapitales.co/terremoto-colombia.html" target="_blank" rel="noreferrer">↗ Reportar/buscar desaparecidos</a>
+      <a href="https://colombiatebusca.com/" target="_blank" rel="noreferrer">↗ Colombia Te Busca</a>
+    </div>
+    <div class="fraud">⚠️ Hay sitios y cuentas falsas pidiendo donaciones o suplantando entidades oficiales. Este panel no es un canal oficial: es información comunitaria complementaria. Para fallecidos y desaparecidos, use siempre los canales de arriba.</div>
+  </div>
+
+  <main>
+    <div class="stats">
+      <div class="stat a"><div class="n mono" id="statAcopio">0</div><div class="l">Acopios activos</div></div>
+      <div class="stat r"><div class="n mono" id="statRiesgo">0</div><div class="l">Riesgos reportados</div></div>
+      <div class="stat v"><div class="n mono" id="statVerif">0</div><div class="l">Verificados</div></div>
+      <div class="stat"><div class="n mono" id="statConfirm">0</div><div class="l">Confirmaciones</div></div>
+    </div>
+
+    <section class="panel">
+      <div class="panel-h"><span class="t">Mapa — acopio, albergues, zonas, hospitales y reportes</span><span class="sub">toca un punto para ver detalle</span></div>
+      <div class="map-wrap"><div id="map"></div><div class="legend" id="legend"></div></div>
+      <div class="zones-note">Mapa comunitario informativo. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.</div>
+    </section>
+
+    <section class="alertbox" id="officialAlerts"></section>
+    <section class="panel"><div class="panel-h"><span class="t">Puntos de albergue</span><span class="sub">estado reportado</span></div><div class="zones" id="shelterList"></div></section>
+    <section class="panel"><div class="panel-h"><span class="t">Puntos de acopio</span><span class="sub">oficiales reportados</span></div><div class="zones" id="acopioList"></div></section>
+    <section class="panel"><div class="panel-h"><span class="t">Últimas noticias</span><span class="sub">curado manualmente</span></div><div class="news" id="newsList"></div></section>
+
+    <div class="actions">
+      <button class="btn acopio" onclick="openForm('acopio')">+ Reportar punto de acopio</button>
+      <button class="btn riesgo" onclick="openForm('riesgo')">+ Reportar edificio en riesgo</button>
+    </div>
+
+    <div class="section-title">Reportes comunitarios</div>
+    <div class="tabs">
+      <button class="tab acopio-t active" id="tabAcopio" onclick="switchTab('acopio')">Acopio</button>
+      <button class="tab riesgo-t" id="tabRiesgo" onclick="switchTab('riesgo')">Edificios en riesgo</button>
+    </div>
+    <div class="list" id="list"></div>
+  </main>
+
+  <footer>Proyecto comunitario independiente, no oficial. Datos aportados por vecinos de Pereira, sujetos a error. Verifique siempre con los canales oficiales antes de tomar decisiones de seguridad.</footer>
+
+  <div class="overlay" id="overlay" style="display:none">
+    <div class="sheet">
+      <h2 id="formTitle">Reportar</h2>
+      <p class="hint" id="formHint"></p>
+      <div class="field"><label>Dirección o punto de referencia *</label><input id="f_addr" placeholder="Ej: Cra 8 con Calle 21, barrio Cuba"></div>
+      <div class="field"><label>Barrio / comuna</label><input id="f_barrio" placeholder="Ej: Cuba"></div>
+      <div class="field" id="f_needBlock"><label>¿Qué necesita este punto ahora? *</label><input id="f_need" placeholder="Ej: agua, pañales, linternas"></div>
+      <div class="field" id="f_sevBlock"><label>Gravedad observada *</label><select id="f_sev"><option value="grietas">Grietas visibles</option><option value="inclinado">Estructura inclinada</option><option value="colapso_parcial">Colapso parcial</option><option value="otro">Otro riesgo</option></select></div>
+      <div class="field"><label>Descripción</label><textarea id="f_desc" placeholder="Detalles útiles: horario si es acopio, qué viste si es riesgo, contacto, etc."></textarea></div>
+      <div class="field"><label>Ubicación en el mapa (opcional, toca para marcar)</label><div id="pickmap"></div><div class="maphint" id="pickhint">Sin marcar — se usará solo la dirección escrita.</div></div>
+      <div class="submitrow"><button class="cancel" onclick="closeForm()">Cancelar</button><button class="confirm" id="submitBtn" onclick="submitForm()">Publicar reporte</button></div>
+    </div>
+  </div>
+
+  <script src="/data.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
