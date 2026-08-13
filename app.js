@@ -5,6 +5,7 @@
   const STORAGE_URL = '/api/storage';
   const CONFIRM_URL = '/api/confirm';
   const GEOCODE_URL = '/api/geocode';
+  const SHELTER_NEEDS_URL = '/api/shelter-needs';
   const CONFIRMED_LOCAL_KEY = 'pereira-confirmed-reports-v1';
   const NEARBY_RADIUS_KM = 3;
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
@@ -16,6 +17,11 @@
     ['zona', '🏚️', 'Zonas'], ['hospital', '🏥', 'Hospitales'],
     ['acopio', '📦', 'Acopios'], ['albergue', '🛟', 'Albergues'],
     ['riesgo', '⚠️', 'Reportes'], ['comercio', '🛒', 'Comercios']
+  ];
+  const SHELTER_NEEDS = [
+    ['water', '💧', 'Agua'], ['food', '🥫', 'Alimentos'], ['clothing', '🧥', 'Ropa y abrigo'],
+    ['medical', '💊', 'Medicamentos'], ['shelter', '⛺', 'Carpas y colchonetas'],
+    ['hygiene', '🧼', 'Higiene'], ['baby', '🍼', 'Artículos para bebés']
   ];
 
   let activeTab = 'todos';
@@ -30,6 +36,8 @@
   let formType = 'acopio';
   let locationRequest = 0;
   let manualLocationMode = false;
+  let shelterNeeds = {};
+  let editingShelterId = null;
 
   function byId(id) { return document.getElementById(id); }
 
@@ -121,6 +129,38 @@
 
   function directionsUrl(lat, lng) {
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${Number(lat)},${Number(lng)}`)}`;
+  }
+
+  function shelterId(item) {
+    return item.n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function activeShelterUpdate(id) {
+    const update = shelterNeeds[id];
+    if (!update || !Array.isArray(update.needs)) return null;
+    const age = Date.now() - new Date(update.updatedAt).getTime();
+    return Number.isFinite(age) && age >= 0 && age < 12 * 60 * 60 * 1000 ? update : null;
+  }
+
+  function relativeUpdateTime(value) {
+    const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000));
+    if (minutes < 1) return 'ahora';
+    if (minutes < 60) return `hace ${minutes} min`;
+    return `hace ${Math.floor(minutes / 60)} h`;
+  }
+
+  function shelterNeedsHtml(item) {
+    const update = activeShelterUpdate(shelterId(item));
+    if (!update) return '<div class="needs-empty">Necesidades: sin reporte reciente</div>';
+    const selected = new Set(update.needs);
+    return `<div class="needs-label">Necesidades · ${relativeUpdateTime(update.updatedAt)}</div><div class="needs-chips">${SHELTER_NEEDS.filter(([key]) => selected.has(key)).map(([, emoji, label]) => `<span>${emoji} ${escapeHtml(label)}</span>`).join('')}</div><small class="community-note">Reporte comunitario · verificar antes de donar</small>`;
+  }
+
+  async function loadShelterNeeds() {
+    const response = await fetch(SHELTER_NEEDS_URL, { cache: 'no-store' });
+    if (!response.ok) throw new Error('needs unavailable');
+    const payload = await response.json();
+    shelterNeeds = payload && payload.updates && typeof payload.updates === 'object' ? payload.updates : {};
   }
 
   function marker(lat, lng, color, title, detail, category, navigable) {
@@ -286,7 +326,8 @@
     byId('shelterList').innerHTML = data.shelters.map(item => {
       const label = item.status === 'ok' ? 'Disponible' : item.status === 'full' ? 'Aforo límite' : 'Verificar';
       const severityClass = item.status === 'ok' ? 'alto' : '';
-      return `<div class="zone ${severityClass}"><div><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div></div><div class="zone-actions"><span class="tag">${label}</span><a class="zone-nav" href="${directionsUrl(item.lat, item.lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a></div></div>`;
+      const id = shelterId(item);
+      return `<div class="zone shelter-zone ${severityClass}"><div class="shelter-main"><div class="zn">${escapeHtml(item.n)}</div><div class="zd">${escapeHtml(item.d)}</div>${shelterNeedsHtml(item)}</div><div class="zone-actions"><span class="tag">${label}</span><a class="zone-nav" href="${directionsUrl(item.lat, item.lng)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a><button class="needs-update" onclick="openNeedsForm('${id}')">✏️ Actualizar necesidades</button></div></div>`;
     }).join('');
 
     byId('acopioList').innerHTML = data.acopio.map(item =>
@@ -297,6 +338,46 @@
       `<article class="newsitem"><div class="nh"><span class="src">${escapeHtml(item.src)}</span><span>${escapeHtml(item.date)}</span></div><p>${escapeHtml(item.text)}</p></article>`
     ).join('');
   }
+
+  window.openNeedsForm = function (id) {
+    const shelter = data.shelters.find(item => shelterId(item) === id);
+    if (!shelter) return;
+    editingShelterId = id;
+    const current = activeShelterUpdate(id);
+    const selected = new Set(current ? current.needs : []);
+    byId('needsShelterName').textContent = shelter.n;
+    byId('needPicker').innerHTML = SHELTER_NEEDS.map(([key, emoji, label]) => `<label><input type="checkbox" value="${key}" ${selected.has(key) ? 'checked' : ''}><span>${emoji}<b>${escapeHtml(label)}</b></span></label>`).join('');
+    byId('needsOverlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  };
+
+  window.closeNeedsForm = function () {
+    byId('needsOverlay').style.display = 'none';
+    document.body.style.overflow = '';
+    editingShelterId = null;
+  };
+
+  window.submitShelterNeeds = async function () {
+    if (!editingShelterId) return;
+    const needs = [...byId('needPicker').querySelectorAll('input:checked')].map(input => input.value);
+    if (!needs.length) return alert('Selecciona al menos una necesidad actual.');
+    const button = byId('needsSubmitBtn');
+    button.disabled = true;
+    button.textContent = 'Publicando…';
+    try {
+      const response = await fetch(SHELTER_NEEDS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shelterId: editingShelterId, needs }) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || 'No fue posible publicar la actualización.');
+      shelterNeeds[editingShelterId] = payload.update;
+      closeNeedsForm();
+      renderStaticContent();
+    } catch (error) {
+      alert(error.message || 'No fue posible publicar la actualización.');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'Publicar actualización';
+    }
+  };
 
   function reportTitle(item) {
     if (item.type === 'acopio') return item.need || 'Punto de acopio comunitario';
@@ -569,6 +650,12 @@
     renderStaticContent();
     initMap();
     renderReports();
+    try {
+      await loadShelterNeeds();
+      renderStaticContent();
+    } catch (error) {
+      console.warn('Las necesidades de albergues no están disponibles.', error);
+    }
     try {
       const types = Object.keys(STORAGE_KEYS);
       const loaded = await Promise.all(types.map(async type => {
