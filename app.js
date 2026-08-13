@@ -3,6 +3,8 @@
 
   const data = window.PEREIRA_DATA;
   const STORAGE_URL = '/api/storage';
+  const CONFIRM_URL = '/api/confirm';
+  const CONFIRMED_LOCAL_KEY = 'pereira-confirmed-reports-v1';
   const NEARBY_RADIUS_KM = 3;
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports', comercio: 'comercio-reports' };
   const COLORS = {
@@ -55,7 +57,7 @@
       lat: validCoordinates(item) ? Number(item.lat) : null,
       lng: validCoordinates(item) ? Number(item.lng) : null,
       createdAt: item.createdAt || item.created || new Date().toISOString(),
-      verified: item.verified === true,
+      verified: false,
       confirmations: Math.max(0, Number(item.confirmations || item.confirms || 0) || 0)
     };
   }
@@ -84,6 +86,30 @@
       body: JSON.stringify({ key: STORAGE_KEYS[type], value: reports[type] })
     });
     if (!response.ok) throw new Error(`No se pudo guardar ${type}`);
+  }
+
+  async function readConfirmationCounts(type) {
+    const response = await fetch(`${CONFIRM_URL}?type=${encodeURIComponent(type)}`, {
+      headers: { Accept: 'application/json' }, cache: 'no-store'
+    });
+    if (!response.ok) throw new Error(`No se pudieron leer confirmaciones de ${type}`);
+    const payload = await response.json();
+    return payload && payload.counts && typeof payload.counts === 'object' ? payload.counts : {};
+  }
+
+  function localConfirmationKey(type, id) { return `${type}:${id}`; }
+
+  function locallyConfirmed(type, id) {
+    try { return JSON.parse(localStorage.getItem(CONFIRMED_LOCAL_KEY) || '[]').includes(localConfirmationKey(type, id)); }
+    catch { return false; }
+  }
+
+  function rememberConfirmation(type, id) {
+    try {
+      const values = new Set(JSON.parse(localStorage.getItem(CONFIRMED_LOCAL_KEY) || '[]'));
+      values.add(localConfirmationKey(type, id));
+      localStorage.setItem(CONFIRMED_LOCAL_KEY, JSON.stringify([...values].slice(-500)));
+    } catch { /* La cookie segura del servidor sigue siendo la fuente de verdad. */ }
   }
 
   function marker(lat, lng, color, title, detail, category) {
@@ -281,12 +307,15 @@
     byId('tabComercio').classList.toggle('active', activeTab === 'comercio');
     byId('list').innerHTML = list.length ? list.map(item => {
       const freshness = commerceFreshness(item);
+      const statusClass = item.verified ? 'verified' : item.confirmations >= 5 ? 'community' : 'unverified';
+      const statusLabel = item.verified ? 'Verificado oficialmente' : item.confirmations >= 5 ? 'Confirmado por la comunidad' : 'Sin confirmar';
+      const alreadyConfirmed = locallyConfirmed(item.type, item.id);
       return `
       <article class="card">
-        <div class="head"><div><div class="title">${escapeHtml(reportTitle(item))}</div><div class="addr">${escapeHtml(item.address)}${item.barrio ? ` · ${escapeHtml(item.barrio)}` : ''}</div></div><div class="status-stack"><span class="status ${item.verified ? 'verified' : 'unverified'}">${item.verified ? 'Verificado' : 'Sin verificar'}</span>${freshness ? `<span class="freshness ${freshness.className}">${freshness.label}</span>` : ''}</div></div>
+        <div class="head"><div><div class="title">${escapeHtml(reportTitle(item))}</div><div class="addr">${escapeHtml(item.address)}${item.barrio ? ` · ${escapeHtml(item.barrio)}` : ''}</div></div><div class="status-stack"><span class="status ${statusClass}">${statusLabel}</span>${freshness ? `<span class="freshness ${freshness.className}">${freshness.label}</span>` : ''}</div></div>
         ${item.description ? `<div class="desc">${escapeHtml(item.description)}</div>` : ''}
         ${commerceDetail(item)}
-        <div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${validCoordinates(item) ? `<button class="mini" onclick="showReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">Ver mapa</button>${item.type === 'comercio' ? `<a class="mini mini-link" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${item.lat},${item.lng}`)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>` : ''}` : ''}<button class="mini" onclick="confirmReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">✓ Confirmar (${item.confirmations})</button></div></div>
+        <div class="meta"><span>${formatDate(item.createdAt)}</span><div class="btnrow">${validCoordinates(item) ? `<button class="mini" onclick="showReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">Ver mapa</button>${item.type === 'comercio' ? `<a class="mini mini-link" href="https://www.google.com/maps/dir/?api=1&amp;destination=${encodeURIComponent(`${item.lat},${item.lng}`)}" target="_blank" rel="noreferrer">↗ Cómo llegar</a>` : ''}` : ''}<button class="mini" ${alreadyConfirmed ? 'disabled' : ''} onclick="confirmReport('${escapeHtml(item.type)}','${escapeHtml(item.id)}')">${alreadyConfirmed ? '✓ Ya confirmaste' : `✓ Confirmar (${item.confirmations}/5)`}</button></div></div>
       </article>`;
     }).join('') : '<div class="empty">Todavía no hay reportes comunitarios en esta categoría.</div>';
     updateStats();
@@ -329,13 +358,18 @@
   window.confirmReport = async function (type, id) {
     const item = reports[type] && reports[type].find(report => report.id === id);
     if (!item) return;
-    const previous = item.confirmations;
-    item.confirmations += 1;
-    renderReports();
-    try { await writeReports(type); }
-    catch (error) {
-      item.confirmations = previous;
+    try {
+      const response = await fetch(CONFIRM_URL, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, reportId: id })
+      });
+      if (!response.ok) throw new Error('confirmation failed');
+      const result = await response.json();
+      item.confirmations = Math.max(0, Number(result.confirmations) || 0);
+      rememberConfirmation(type, id);
       renderReports();
+      if (!result.added) alert('Este dispositivo ya había confirmado este reporte.');
+    } catch (error) {
       alert('No fue posible guardar la confirmación. Inténtalo de nuevo.');
     }
   };
@@ -437,10 +471,19 @@
     initMap();
     renderReports();
     try {
-      const loaded = await Promise.all([readReports('acopio'), readReports('riesgo'), readReports('comercio')]);
-      reports.acopio = loaded[0];
-      reports.riesgo = loaded[1];
-      reports.comercio = loaded[2];
+      const types = Object.keys(STORAGE_KEYS);
+      const loaded = await Promise.all(types.map(async type => {
+        const items = await readReports(type);
+        try {
+          const counts = await readConfirmationCounts(type);
+          items.forEach(item => { item.confirmations = Math.max(0, Number(counts[item.id]) || 0); });
+        } catch (error) {
+          items.forEach(item => { item.confirmations = 0; });
+          console.warn(`Las confirmaciones de ${type} no están disponibles.`, error);
+        }
+        return items;
+      }));
+      types.forEach((type, index) => { reports[type] = loaded[index]; });
       renderReports();
     } catch (error) {
       console.warn('Los reportes comunitarios no están disponibles.', error);
