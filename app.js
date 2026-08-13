@@ -3,6 +3,7 @@
 
   const data = window.PEREIRA_DATA;
   const STORAGE_URL = '/api/storage';
+  const NEARBY_RADIUS_KM = 3;
   const STORAGE_KEYS = { acopio: 'acopio-reports', riesgo: 'riesgo-reports' };
   const COLORS = {
     acopio: '#4C8DFF', riesgo: '#E4483C', zona: '#E8B339',
@@ -13,6 +14,7 @@
   let reports = { acopio: [], riesgo: [] };
   let map;
   let reportLayer;
+  let locationLayer;
   let pickMap;
   let pickMarker;
   let pickedLocation = null;
@@ -86,6 +88,41 @@
     }).bindPopup(`${tag}<b class="map-popup-title">${escapeHtml(title)}</b><br>${escapeHtml(detail || '')}`);
   }
 
+  function distanceKm(from, to) {
+    const radians = value => value * Math.PI / 180;
+    const earthRadiusKm = 6371;
+    const dLat = radians(Number(to.lat) - Number(from.lat));
+    const dLng = radians(Number(to.lng) - Number(from.lng));
+    const lat1 = radians(Number(from.lat));
+    const lat2 = radians(Number(to.lat));
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+    return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function nearbyCandidates() {
+    return [
+      ...data.acopio.map(item => ({ ...item, icon: '📦', type: 'Centro de acopio' })),
+      ...data.shelters.map(item => ({ ...item, icon: '🛟', type: 'Albergue' })),
+      ...data.hospitals.map(item => ({ ...item, icon: '🏥', type: 'Hospital' })),
+      ...data.zones.map(item => ({ ...item, icon: '⚠️', type: 'Alerta / zona afectada' }))
+    ].concat(Object.values(reports).flat().filter(validCoordinates).map(item => ({
+      ...item, n: reportTitle(item), d: `${item.address}${item.barrio ? ` · ${item.barrio}` : ''}`,
+      icon: item.type === 'acopio' ? '📍' : '⚠️',
+      type: item.type === 'acopio' ? 'Acopio comunitario' : 'Reporte de edificio'
+    })));
+  }
+
+  function renderNearby(position) {
+    const nearby = nearbyCandidates().map(item => ({ ...item, distance: distanceKm(position, item) }))
+      .filter(item => item.distance <= NEARBY_RADIUS_KM).sort((a, b) => a.distance - b.distance);
+    const results = byId('nearbyResults');
+    results.hidden = false;
+    results.innerHTML = `<div class="nearby-head"><b>Ayuda y alertas a 3 km</b><button onclick="clearNearby()">Mostrar todo</button></div>` +
+      (nearby.length ? nearby.map(item => `<button class="nearby-item" onclick="focusNearby(${Number(item.lat)},${Number(item.lng)})"><span class="nearby-icon">${item.icon}</span><span><b>${escapeHtml(item.n)}</b><small>${escapeHtml(item.type)} · ${escapeHtml(item.d || '')}</small></span><strong>${item.distance.toFixed(1).replace('.', ',')} km</strong></button>`).join('') :
+        '<div class="nearby-empty">No hay puntos registrados dentro de 3 km. Verifique los canales oficiales.</div>') +
+      '<div class="nearby-note">Distancias en línea recta. La ruta puede estar bloqueada o no ser segura.</div>';
+  }
+
   function initMap() {
     map = L.map('map', { zoomControl: true }).setView(data.center, 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -97,12 +134,50 @@
     data.acopio.forEach(item => marker(item.lat, item.lng, COLORS.acopio, item.n, item.d, '📦 Centro de acopio').addTo(map));
     data.shelters.forEach(item => marker(item.lat, item.lng, COLORS.albergue, item.n, item.d, '🛟 Albergue').addTo(map));
     reportLayer = L.layerGroup().addTo(map);
+    locationLayer = L.layerGroup().addTo(map);
 
     byId('legend').innerHTML = [
       ['zona', 'Zona afectada'], ['hospital', 'Hospital'], ['acopio', 'Acopio'],
       ['albergue', 'Albergue'], ['riesgo', 'Reporte']
     ].map(([key, label]) => `<span><i class="dot" style="background:${COLORS[key]}"></i>${label}</span>`).join('');
   }
+
+  window.findNearby = function () {
+    const button = byId('nearbyBtn');
+    if (!navigator.geolocation) {
+      alert('Este navegador no permite obtener la ubicación.');
+      return;
+    }
+    button.disabled = true;
+    button.textContent = '📍 Ubicando…';
+    navigator.geolocation.getCurrentPosition(position => {
+      const current = { lat: position.coords.latitude, lng: position.coords.longitude };
+      locationLayer.clearLayers();
+      L.circle(current, { radius: NEARBY_RADIUS_KM * 1000, color: COLORS.acopio, weight: 2, fillColor: COLORS.acopio, fillOpacity: .08 }).addTo(locationLayer);
+      L.circleMarker(current, { radius: 8, color: '#fff', weight: 3, fillColor: COLORS.acopio, fillOpacity: 1 }).bindPopup('<b>📍 Tu ubicación aproximada</b><br>No se guarda ni se comparte.').addTo(locationLayer);
+      map.fitBounds(L.circle(current, { radius: NEARBY_RADIUS_KM * 1000 }).getBounds(), { padding: [18, 18] });
+      renderNearby(current);
+      button.disabled = false;
+      button.textContent = '✓ Ubicación activada';
+    }, error => {
+      button.disabled = false;
+      button.textContent = '📍 Ver ayuda cerca de mí';
+      const message = error.code === 1 ? 'No se concedió permiso para usar la ubicación.' : 'No fue posible obtener tu ubicación. Inténtalo de nuevo.';
+      alert(message);
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 });
+  };
+
+  window.clearNearby = function () {
+    locationLayer.clearLayers();
+    byId('nearbyResults').hidden = true;
+    byId('nearbyBtn').textContent = '📍 Ver ayuda cerca de mí';
+    map.setView(data.center, 13);
+  };
+
+  window.focusNearby = function (lat, lng) {
+    map.setView([lat, lng], 17);
+    window.scrollTo({ top: byId('map').getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' });
+  };
 
   function renderStaticContent() {
     byId('officialAlerts').innerHTML = '<div class="ah"><span>Alertas oficiales reportadas</span><span>Verifique vigencia</span></div>' +
