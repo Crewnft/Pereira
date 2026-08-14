@@ -7,6 +7,13 @@ window.PEREIRA_DATA = {
       d:'Circulación vehicular y peatonal restringida entre carreras 4 y 10, desde la calle 14 hasta la calle 28. Evite la zona y facilite las labores de emergencia.',
       source:'Alcaldía de Pereira · 13 ago 2026, 4:12 p. m.',
       bounds:[[4.81490,-75.69387],[4.81127,-75.69147],[4.81435,-75.69887],[4.81798,-75.70127]]
+    },
+    {
+      id:'invico-collapse-risk-2026-08-14',
+      n:'Riesgo de colapso — Sector Invico',
+      d:'Ingreso estrictamente restringido para peatones, vehículos y motocicletas entre calles 10 y 15, desde la carrera 12 hasta la carrera 15.',
+      source:'Alcaldía de Pereira · 14 ago 2026',
+      bounds:[[4.80918,-75.68855],[4.80737,-75.68735],[4.80847,-75.69000],[4.81028,-75.69120]]
     }
   ],
   zones: [
@@ -43,7 +50,7 @@ window.PEREIRA_DATA = {
     {n:'Café Comuna del Café', d:'Cra 3 con Calle 59A, Parque Industrial', lat:4.82509, lng:-75.72988},
     {n:'CAM — reportes y censo', d:'Cra 7 #18-55 · 606 324 8000', lat:4.81454, lng:-75.69381},
     {n:'Banco de Alimentos (reubicado)', d:'Tv. 5 #6-30, La Badea, Dosquebradas · llamar antes: 314 896 2397', lat:4.82388, lng:-75.69097},
-    {n:'Expofuturo — punto principal', d:'Villa Olímpica · elementos de aseo, pañales, calzado, sábanas e hidratación', lat:4.80596, lng:-75.75586}
+    {n:'Expofuturo — punto principal', d:'Villa Olímpica · necesidad oficial vigente: colchonetas, sábanas y almohadas', lat:4.80596, lng:-75.75586}
   ],
   shelters: [
     {n:'Ecoparque El Vergel', d:'Disponible', lat:4.80012, lng:-75.70067, status:'ok'},
@@ -53,10 +60,13 @@ window.PEREIRA_DATA = {
     {n:'Estadio Mora Mora', d:'Comuna Oriente — verificar estado antes de ir', lat:4.80731, lng:-75.67048, status:'check'}
   ],
   alerts: [
+    {title:'Riesgo de colapso en el sector Invico.', text:'Ingreso prohibido entre calles 10 y 15, desde la carrera 12 hasta la carrera 15. La restricción aplica a peatones, vehículos y motocicletas.', restrictionId:'invico-collapse-risk-2026-08-14'},
     {title:'Cerco de emergencia en el centro de Pereira.', text:'La Alcaldía restringió la circulación vehicular y peatonal entre carreras 4 y 10, desde la calle 14 hasta la calle 28. Evite la zona y facilite las labores de emergencia.', restrictionId:'centro-emergency-cordon-2026-08-13'},
     {title:'Precaución en la zona del Estadio Hernán Ramírez Villegas y alrededores.', text:'Se reportaron muros en riesgo. Verifique la información oficial y la ruta de acceso antes de transitar por el sector.'}
   ],
   news: [
+    {src:'Alcaldía de Pereira', date:'14 ago', text:'Restringido el ingreso al sector Invico entre calles 10 y 15 y carreras 12 y 15 por alto riesgo de colapso.'},
+    {src:'Alcaldía de Pereira', date:'14 ago', text:'Expofuturo solicita prioritariamente colchonetas, sábanas y almohadas.'},
     {src:'SGC / prensa', date:'10 ago', text:'Sismo de magnitud 7,4 con epicentro cerca de San José del Palmar (Chocó), profundidad aproximada de 82 km.'},
     {src:'Asocapitales', date:'11 ago', text:'Se reportó un balance nacional de víctimas y daños en varias ciudades capitales afectadas.'},
     {src:'Bomberos Pereira / prensa', date:'11 ago', text:'La Lorena, Plaza de Bolívar, Rincón de la Villa y otros puntos del centro fueron señalados como focos activos de intervención.'},
